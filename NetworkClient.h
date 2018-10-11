@@ -7,19 +7,18 @@
 class NetworkClient
 {
 	public:
+		NetworkClient(int ok, int working, int error);
 		boolean IsConnected();
 		boolean IsRegistered();
-		NetworkClient(int ok, int working, int error);
-		void setLedStatus(String status);
-		boolean ConnectToWifi(String ssid, String passphrase);
-		void get(String url);
-		void post(String url, String json);
-		String getLastResultString();
-		int getLastResultCode();
-		void flush();
 		boolean ApiRegistration(String url, String arguments);
-		void Ping(String url);
+		boolean ConnectToWifi(char* ssid, char* passphrase);
+		String GetLastResultString();
+		void Flush();
+		void SetLedStatus(String status);
 		void Print(String text);
+		void Get(String url);
+		String NewReading(String reading, String url);
+		int GetLastResultCode();
 
 	private:
 		int _pinOk;

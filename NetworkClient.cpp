@@ -1,6 +1,7 @@
 #include "Arduino.h";
 #include "NetworkClient.h";
 #include "ESP8266WiFi.h";
+#include <ArduinoJson.h>
 
 NetworkClient::NetworkClient(int ok, int working, int error)
 { 
@@ -12,9 +13,31 @@ NetworkClient::NetworkClient(int ok, int working, int error)
 	_pinError = error;
 }
 
-void NetworkClient::setLedStatus(String status)
+String NetworkClient::NewReading(String value, String url)
 {
-	if (status == "ok") {
+	SetLedStatus("working");
+
+	StaticJsonBuffer<300> JSONbuffer;
+	JsonObject& JSONencoder = JSONbuffer.createObject();
+	JSONencoder["value"] = value;
+	JSONencoder["token"] = _token;
+
+	char JSONmessageBuffer[300];
+    JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+    Serial.println(JSONmessageBuffer);
+
+	_client.begin(url);
+	_client.addHeader("Content-Type", "application/json");
+	_lastResultCode = _client.POST(JSONmessageBuffer);
+	_lastResultString = _client.getString();
+	_client.end();
+	SetLedStatus("ready");
+	return _lastResultString;
+}
+
+void NetworkClient::SetLedStatus(String status)
+{
+	if (status == "ready") {
 		digitalWrite(_pinOk, HIGH);
 		digitalWrite(_pinIsWorking, LOW);
 		digitalWrite(_pinError, LOW);
@@ -41,12 +64,14 @@ boolean NetworkClient::IsRegistered()
 	return _isRegistered;
 }
 
-boolean NetworkClient::ConnectToWifi(String ssid, String passphrase) 
+boolean NetworkClient::ConnectToWifi(char* ssid, char* passphrase) 
 {
 	Print("Connecting...");
-	setLedStatus("working");
+	SetLedStatus("working");
+	
+	WiFi.begin(ssid,passphrase);
 
-	while (WiFi.status() != WL_CONNECTED && _connectionAttempts < 10) {
+	while (WiFi.status() != WL_CONNECTED && _connectionAttempts < 1000) {
 	    delay(1000);
 	    Print("Trying Wifi...");
 	    _connectionAttempts++;
@@ -54,14 +79,14 @@ boolean NetworkClient::ConnectToWifi(String ssid, String passphrase)
 
 	if (WiFi.status() == WL_CONNECTED) {
 		Print("Connected to wifi");
-		setLedStatus("ok");
+		SetLedStatus("ready");
 		return true;
 	}
 
 	return false;
 }
 
-void NetworkClient::get(String url)
+void NetworkClient::Get(String url)
 {
 	_client.begin(url);
 	_lastResultCode = _client.GET();
@@ -69,70 +94,63 @@ void NetworkClient::get(String url)
 	_client.end();
 }
 
-void NetworkClient::post(String url, String arguments)
-{
-	_client.begin(url);
-	_client.addHeader("Content-Type", "application/x-www-form-urlencoded");
-	_lastResultCode = _client.POST(arguments);
-	_lastResultString = _client.getString();
-	_client.end();
-}
-
-void NetworkClient::Ping(String url)
-{
-	setLedStatus("working");
-
-	String arguments = "token=";
-	arguments.concat(_token);
-
-	post(url, arguments);
-
-	if (getLastResultCode() == 201) {
-		Print("Ping recevied pong");
-		setLedStatus("ok");
-	} else {
-		Print("Error - Ping did not receive pong:");
-		setLedStatus("error");
-	}
-
-	flush();
-}
-
 boolean NetworkClient::ApiRegistration(String url, String arguments)
 {
-	setLedStatus("working");
+	SetLedStatus("working");
 	
 	Print("Trying to register with api...");
 
-	post(url, arguments);
+	StaticJsonBuffer<300> JSONbuffer;
+	JsonObject& JSONencoder = JSONbuffer.createObject();
+	JSONencoder["name"] = "sensor unit";
+	JSONencoder["description"] = "potentially several different sensors";
+	JSONencoder["type"] = "sensor";
+	JSONencoder["url"] = "";
+	JSONencoder["token"] = "";
 
-	if (getLastResultCode() == 201) {
-		_token = getLastResultString();
+	char JSONmessageBuffer[300];
+    JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+    // Serial.println(JSONmessageBuffer);
+
+	_client.begin(url);
+	_client.addHeader("Content-Type", "application/json");
+	_lastResultCode = _client.POST(JSONmessageBuffer);
+	_lastResultString = _client.getString();
+	_client.end();
+
+	if (GetLastResultCode() == 201) {
+		StaticJsonBuffer<300> jsonBuffer;
+
+		JsonObject& root = jsonBuffer.parseObject(_lastResultString);
+		_token = root["status_message"]["token"].as<String>();
+
+		Print(_lastResultString);
+
 		Print("201 - Registration OK!");
-		setLedStatus("ok");
-		flush();
+		SetLedStatus("ready");
+		Flush();
 		_isRegistered = true;
 	}
 	else {
 		Print("Error - Not registered");
-		setLedStatus("error");
-		flush();
+		SetLedStatus("error");
+		Flush();
 		_isRegistered = false;
 	}
 }
 
-String NetworkClient::getLastResultString() 
+String NetworkClient::GetLastResultString() 
 {
 	return _lastResultString;
 }
 
-void NetworkClient::flush()
+void NetworkClient::Flush()
 {
 	_lastResultString = "";
 	_lastResultCode = -1;
 }
 
-int NetworkClient::getLastResultCode()
+int NetworkClient::GetLastResultCode()
 {
 	return _lastResultCode;
 }
