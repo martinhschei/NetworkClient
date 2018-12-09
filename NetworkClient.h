@@ -17,6 +17,7 @@ class NetworkClient
 		void SetLedStatus(String status);
 		void Print(String text);
 		void Get(String url);
+		void Post(String url, String value);
 		String NewReading(String reading, String url);
 		int GetLastResultCode();
 

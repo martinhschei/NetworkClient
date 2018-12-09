@@ -1,7 +1,6 @@
-#include "Arduino.h";
-#include "NetworkClient.h";
 #include "ESP8266WiFi.h";
-#include <ArduinoJson.h>
+#include "ArduinoJson.h";
+#include "NetworkClient.h";
 
 NetworkClient::NetworkClient(int ok, int working, int error)
 { 
@@ -11,6 +10,23 @@ NetworkClient::NetworkClient(int ok, int working, int error)
 	_pinOk = ok;
 	_pinIsWorking = working;
 	_pinError = error;
+}
+
+void NetworkClient::Post(String url, String value)
+{
+	StaticJsonBuffer<300> JSONbuffer;
+	JsonObject& JSONencoder = JSONbuffer.createObject();
+	JSONencoder["value"] = value;
+
+	char JSONmessageBuffer[300];
+    JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+    
+	_client.begin(url);
+	_client.addHeader("Content-Type", "application/json");
+	_lastResultCode = _client.POST(JSONmessageBuffer);
+	_lastResultString = _client.getString();
+	Print(_lastResultString);
+	_client.end();
 }
 
 String NetworkClient::NewReading(String value, String url)
